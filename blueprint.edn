@@ -1,0 +1,12 @@
+{:itonami.blueprint/id "cloud-itonami-iso3166-jpn-mhlw"
+ :itonami.blueprint/name "Independent MHLW-Regulated Labor-Standards Compliance Service — Japan (MHLW)"
+ :itonami.blueprint/iso3166 "JPN-MHLW"
+ :itonami.blueprint/iso3166-parent "JPN"
+ :itonami.blueprint/ooyake-id "gov.jpn.mhlw"
+ :itonami.blueprint/domain :public-sector/mhlw-labor-compliance
+ :itonami.blueprint/license "AGPL-3.0-or-later"
+ :itonami.blueprint/social-impact [:worker-protection-clarity :labor-standards-compliance :public-spend-transparency]
+ :itonami.blueprint/governor :labor-standards-compliance-governor
+ :itonami.blueprint/robotics false
+ :itonami.blueprint/required-technologies [:identity :forms :dmn :bpmn :audit-ledger]
+ :itonami.blueprint/status :public-oss}
