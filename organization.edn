@@ -1,3 +1,13 @@
 ;; Real-world organization location / contact.
 ;; :head-role is institutional title only — no personal names.
-{:contact-page "https://www.mhlw.go.jp/", :ooyake-id "gov.jpn.mhlw", :sourced-from "com-etzhayyim-ooyake gov-units (verbatim where present)", :head-role-note "institutional office title only; personal names of current office-holders are intentionally NOT stored", :official-url "https://www.mhlw.go.jp/", :head-role "厚生労働大臣", :hq {:last-verified "2026-06-02", :phone "03-5253-1111", :line-en "1-2-2 Kasumigaseki, Chiyoda-ku, Tokyo", :line-local "東京都千代田区霞が関1-2-2", :postal-code "100-8916", :kind "headquarters", :provenance "https://www.mhlw.go.jp/", :hours "平日 9:30-18:15", :sourcing "representative", :country "jpn"}, :wikidata "Q1191238", :name-en "Ministry of Health, Labour and Welfare", :name-local "厚生労働省"}
+{:ooyake-id "gov.jpn.mhlw"
+  :official-url "https://www.mhlw.go.jp/"
+  :name-en "Ministry of Health, Labour and Welfare"
+  :name-local "厚生労働省"
+  :wikidata "Q1191238"
+  :head-role "厚生労働大臣"
+  :head-role-note "institutional office title only; personal names of current office-holders are intentionally NOT stored"
+  :contact-page "https://www.mhlw.go.jp/"
+  :sourced-from "com-etzhayyim-ooyake gov-units (verbatim where present)"
+  :hq {:postal-code "100-8916" :line-local "東京都千代田区霞が関1-2-2" :line-en "1-2-2 Kasumigaseki, Chiyoda-ku, Tokyo" :country "jpn" :phone "03-5253-1111" :hours "平日 9:30-18:15" :kind "headquarters" :provenance "https://www.mhlw.go.jp/" :last-verified "2026-06-02" :sourcing "representative"}
+}
