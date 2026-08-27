@@ -1,0 +1,160 @@
+;; Regenerate every measurement facts.edn's header states.
+;;
+;;   nbb --classpath scripts scripts/measure-host.cljs
+;;
+;; This exists so the header's numbers are reproducible with the SAME de-tag
+;; verify-facts.cljs subtracts needles with -- see scripts/host_probe.cljs for
+;; why that matters and what it cost the first time it did not.
+;;
+;; It measures; it does not judge. Nothing here exits non-zero on a surprise,
+;; because a surprise here means the header needs updating, and the check that
+;; a claim is still true is verify-facts.cljs's job. Keeping the two apart
+;; stops this from becoming a second, quieter verifier that disagrees with the
+;; first one.
+;;
+;; The corpus scan at the end walks all 9550 laws in pages of 500 (about 20
+;; requests) and is the slow part. Pass --no-corpus to skip it.
+
+(ns measure-host
+  (:require ["fs" :as fs]
+            [clojure.edn :as edn]
+            [clojure.string :as str]
+            [host-probe :as hp]))
+
+(def ^:private argv (vec (drop 2 (js->clj js/process.argv))))
+(def ^:private corpus? (not (some #{"--no-corpus"} argv)))
+
+(def ^:private needles
+  ["労働基準法" "労働基準監督署" "監督署" "届出"
+   "労働安全衛生法" "36協定" "時間外労働" "就業規則" "割増賃金"])
+
+(defn- count-occurrences [hay needle]
+  (loop [i 0 n 0]
+    (let [j (str/index-of hay needle i)]
+      (if j (recur (+ j (count needle)) (inc n)) n))))
+
+(defn- sha256-hex [bytes]
+  (-> (js/crypto.subtle.digest "SHA-256" bytes)
+      (.then (fn [buf]
+               (->> (js/Uint8Array. buf)
+                    (map #(.padStart (.toString % 16) 2 "0"))
+                    (apply str))))))
+
+(defn- scan-corpus
+  "repeal_status and current_revision_status token counts over the WHOLE
+   corpus, plus the joint distribution with remain_in_force. Counted, not
+   assumed: the register's claim that remain_in_force is true only on dead law
+   is a claim about all 9550 rows, and there is no way to make it from a
+   sample."
+  [base]
+  (let [pages (range 0 9550 500)]
+    (-> (js/Promise.all
+         (clj->js (map #(hp/fetch-json (str base "?limit=500&offset=" %)) pages)))
+        (.then
+         (fn [rs]
+           (let [rows (for [r (js->clj rs)
+                            law (get (:json r) "laws")]
+                        (let [rev (get law "revision_info")]
+                          {:repeal (get rev "repeal_status")
+                           :revision (get rev "current_revision_status")
+                           :remain (get rev "remain_in_force")
+                           :id (get (get law "law_info") "law_id")
+                           :title (get rev "law_title")}))]
+             {:n (count rows)
+              :repeal (frequencies (map :repeal rows))
+              :revision (frequencies (map :revision rows))
+              :joint (frequencies (map (juxt :repeal :remain) rows))
+              :remain-true (filter :remain rows)}))))))
+
+(defn- main []
+  (let [entries (edn/read-string (fs/readFileSync "facts.edn" "utf8"))
+        by-id (into {} (map (juxt :source/id identity)) entries)
+        mhlw (by-id :host/mhlw)
+        egov (by-id :host/e-gov)
+        probe (:host/missing-probe mhlw)
+        front (:host/front-page mhlw)
+        pages (filter #(= :verify/page (:source/verify %)) entries)]
+    (-> (js/Promise.all
+         (clj->js [(hp/fetch-bytes probe)
+                   (hp/fetch-bytes front)
+                   (js/Promise.all (clj->js (map #(hp/fetch-bytes (:page/url %)) pages)))
+                   (hp/fetch-head probe)
+                   (hp/fetch-head (:page/url (first pages)))
+                   (hp/fetch-json (str (:host/api-base egov) "999AC0000000999"))]))
+        (.then
+         (fn [[probe-r front-r page-rs head-404 head-200 fab]]
+           (let [page-rs (js->clj page-rs)
+                 t404 (hp/de-tag (hp/decode-utf8-strict (:bytes probe-r)))
+                 tfront (hp/de-tag (hp/decode-utf8-strict (:bytes front-r)))]
+             (-> (js/Promise.all (clj->js [(sha256-hex (:bytes probe-r))
+                                           (sha256-hex (:bytes front-r))]))
+                 (.then
+                  (fn [[sha404 shafront]]
+                    (println "-- BYTES AND SHA (response bytes, not characters)")
+                    (println (str "  404    " (:status probe-r) "  "
+                                  (.-length (:bytes probe-r)) " B  sha " (subs sha404 0 12)))
+                    (println (str "  front  " (:status front-r) "  "
+                                  (.-length (:bytes front-r)) " B  sha " (subs shafront 0 12)))
+                    (doseq [[e r] (map vector pages page-rs)]
+                      (println (str "  " (name (:source/id e)) "  " (:status r) "  "
+                                    (.-length (:bytes r)) " B")))
+
+                    (println)
+                    (println "-- TEXT LENGTH (characters, via host-probe/de-tag)")
+                    (println (str "  404 body                " (count t404)))
+                    (println (str "  front page              " (count tfront)))
+                    (doseq [[e r] (map vector pages page-rs)]
+                      (let [t (hp/de-tag (hp/decode-utf8-strict (:bytes r)))]
+                        (println (str "  " (.padEnd (name (:source/id e)) 24) (count t)
+                                      (when (< (count t) (count t404))
+                                        (str "   <- SHORTER than the 404 by "
+                                             (- (count t404) (count t))))))))
+
+                    (println)
+                    (println "-- SUBJECT NEEDLES ON THE 404 BODY")
+                    (doseq [n needles]
+                      (println (str "  " (.padEnd n 10) (count-occurrences t404 n))))
+
+                    (println)
+                    (println "-- HEAD")
+                    (println (str "  HEAD 404  status " (:status head-404)
+                                  "  content-length " (pr-str (:content-length head-404))))
+                    (println (str "  HEAD 200  status " (:status head-200)
+                                  "  content-length " (pr-str (:content-length head-200))))
+
+                    (println)
+                    (println "-- FABRICATED LAW ID")
+                    (println (str "  laws?law_id=999AC0000000999  status " (:status fab)
+                                  "  total_count " (get (:json fab) "total_count")))
+
+                    (println)
+                    (println "-- CHROME SHARE (segments of 6+ chars not already on the 404)")
+                    (doseq [[e r] (map vector pages page-rs)]
+                      (let [t (hp/de-tag (hp/decode-utf8-strict (:bytes r)))
+                            segs (->> (re-seq #"[^\s、。｜|/\[\]（）()]{6,}" t)
+                                      (remove #(str/includes? t404 %))
+                                      set)]
+                        (println (str "  " (.padEnd (name (:source/id e)) 24)
+                                      (count segs) " unique"))))
+
+                    (if-not corpus?
+                      (println "\n-- CORPUS SCAN skipped (--no-corpus)")
+                      (-> (scan-corpus "https://laws.e-gov.go.jp/api/2/laws")
+                          (.then
+                           (fn [c]
+                             (println)
+                             (println (str "-- CORPUS SCAN (" (:n c) " laws)"))
+                             (println "  repeal_status:")
+                             (doseq [[k v] (sort-by (comp - val) (:repeal c))]
+                               (println (str "    " (.padEnd (str k) 22) v
+                                             "   remain_in_force true: "
+                                             (get (:joint c) [k true] 0))))
+                             (println "  current_revision_status:")
+                             (doseq [[k v] (sort-by (comp - val) (:revision c))]
+                               (println (str "    " (.padEnd (str k) 22) v)))
+                             (println (str "  laws flagged remain_in_force: "
+                                           (count (:remain-true c))
+                                           " -- all repealed or expired: "
+                                           (every? #(not= "None" (:repeal %)) (:remain-true c)))))))))))))))))
+
+(main)

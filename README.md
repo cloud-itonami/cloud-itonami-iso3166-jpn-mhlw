@@ -49,6 +49,52 @@ set — it always requires human sign-off (mirrors `cloud-itonami-M6910`'s
   Japan-licensed counsel or a registered agent where the law requires
   licensed representation.
 
+## The source register — [`facts.edn`](facts.edn)
+
+The rule above requires a citation against a set. `facts.edn` is that set:
+13 statutes and ordinances, 8 MHLW pages, the 4 36協定 filing forms
+(様式第9号 and its variants), and 8 controls. **A regulation not in that
+table has no spec-basis here** — extend the table, never invent a law id or
+a URL.
+
+It is tx-data, so it loads like every other EDN corpus in this workspace:
+
+```clojure
+(d/transact conn (edn/read-string (slurp "facts.edn")))
+```
+
+Every entry is re-fetched from the live authority by:
+
+```bash
+nbb --classpath scripts scripts/verify-facts.cljs     # 0 ok / 1 wrong / 2 REFUSED
+nbb --classpath scripts scripts/break-tests.cljs      # does that script actually go red?
+nbb --classpath scripts scripts/measure-host.cljs     # regenerate the header's numbers
+```
+
+**Exit 2 is not a pass.** A run that could not answer — an unreadable body, a
+404 probe that stopped 404ing, a needle that has drifted into site chrome —
+reports differently from a run that checked everything and found a problem,
+because collapsing those two is how a check quietly stops being one.
+
+Three things this host does that the checks are shaped around, all measured
+and written up in `facts.edn`'s header:
+
+- **労働基準法 and 労働基準監督署 are on the 404 page.** The two most obvious
+  needles for this repository verify against a page that does not exist, so
+  needles are chosen by subtracting the live 404 body and the verifier redoes
+  that subtraction every run.
+- **A fabricated law id answers HTTP 200.** The statute checks never read the
+  status; identity is `total_count` plus an exact `law_id` match.
+- **The repeal fields are in `revision_info`, not `law_info`.** Read from the
+  wrong object they come back `nil`, and the live not-repealed value is the
+  string `"None"` — so their *presence* is asserted separately from their
+  value, and a check that cannot find them refuses instead of concluding the
+  law is fine.
+
+The controls (`:law/repealed-control` and friends) are cited for **no
+proposition**. Deleting one weakens no citation; it turns the check that
+depended on it into something that cannot fail.
+
 ## Capability layer
 
 Resolves via [`kotoba-lang/iso3166`](https://github.com/kotoba-lang/iso3166)

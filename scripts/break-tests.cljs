@@ -1,0 +1,149 @@
+;; Break the register on purpose and check that verify-facts.cljs goes red --
+;; and red for the RIGHT REASON, and with the right exit code.
+;;
+;;   nbb --classpath scripts scripts/break-tests.cljs
+;;
+;; -- WHAT THIS ADDS OVER THE SELF-TESTS
+;;
+;; verify-facts.cljs already runs twenty self-tests that drive its judges over
+;; live responses with one expectation doctored. Those prove the judges
+;; discriminate. They cannot prove anything about the SCRIPT: that a failing
+;; entry actually reaches the exit code, that a refusal outranks a failure,
+;; that the aggregation does not quietly drop a verdict on the floor.
+;;
+;; A judge that returns :page/needle-absent and a run that exits 0 anyway is a
+;; perfectly plausible bug, and every self-test would still pass. So this file
+;; writes doctored copies of facts.edn, runs the real script against each as a
+;; SUBPROCESS, and asserts the process exit code and the reason keyword that
+;; appears in its output.
+;;
+;; -- THE CONTROL MATTERS AS MUCH AS THE MUTATIONS
+;;
+;; The first case below changes nothing and requires exit 0. Without it, every
+;; other case here is satisfied by a script that always fails -- which is the
+;; failure mode this whole file exists to rule out, and the one a
+;; break-test suite is most likely to have.
+;;
+;; -- EXIT CODES ARE ASSERTED SEPARATELY FROM REASONS
+;;
+;; Two mutations below must produce exit 2 (REFUSED), not exit 1. A register
+;; whose needle has drifted into site chrome is not a finding about the world;
+;; collapsing that into a failure is exactly the confusion the three-code
+;; scheme exists to prevent, and only an end-to-end check can see it.
+;;
+;; This is slow -- each case is a full live run of about forty fetches. That
+;; is the cost of testing the script rather than a stub of it.
+
+(ns break-tests
+  (:require ["fs" :as fs]
+            ["child_process" :as cp]
+            [clojure.string :as str]))
+
+(def ^:private facts (fs/readFileSync "facts.edn" "utf8"))
+
+(defn- mutate
+  "Textual substitution on the register. Deliberately NOT a structural edit:
+   the point is to produce a file a person could plausibly have written, and
+   to fail loudly if the anchor is not found rather than silently testing an
+   unmutated file -- a break test that forgot to break anything reports the
+   same green as one that worked."
+  [from to]
+  (when-not (str/includes? facts from)
+    (throw (js/Error. (str "anchor not found in facts.edn: " (pr-str from)
+                           " -- this mutation would have tested nothing"))))
+  (str/replace facts from to))
+
+(def ^:private cases
+  [{:name "unmodified register"
+    :why "the control. Without it every case below passes for a script that always fails."
+    :facts facts
+    :exit 0
+    :expect-in-output "OK -- all"}
+
+   {:name "a law title that no longer matches the authority"
+    :why "an ordinary finding about the world: exit 1."
+    :facts (mutate ":law/title \"労働安全衛生法\"" ":law/title \"労働安全衛生法（旧）\"")
+    :exit 1
+    :expect-in-output ":law/title-mismatch"}
+
+   {:name "a page needle that is on the site 404 body"
+    :why "a broken check, not a changed page: exit 2, REFUSED. If this ever
+          reported exit 1 it would be indistinguishable from a real finding."
+    :facts (mutate ":page/needle \"労働安全衛生法\"" ":page/needle \"労働基準法\"")
+    :exit 2
+    :expect-in-output ":refused/needle-on-404"}
+
+   {:name "a filing form that has been deleted"
+    :why "the 404 answers with 48 KB of HTML, so this only goes red if the
+          status and magic-byte checks are actually reached."
+    :facts (mutate "https://www.mhlw.go.jp/content/11200000/001695822.docx"
+                   "https://www.mhlw.go.jp/content/11200000/000000000-gone.docx")
+    :exit 1
+    :expect-in-output ":form/bad-status"}
+
+   {:name "a statute that has been repealed"
+    :why "the register says None; the authority says Repeal. Exercises the
+          field the first draft of this repository read from the wrong object."
+    :facts (mutate ":law/id \"322AC0000000049\"" ":law/id \"324AC0000000068\"")
+    :exit 1
+    :expect-in-output ":law/"}
+
+   {:name "the 404 probe no longer 404s"
+    :why "every page needle is subtracted from that body. If it is not a
+          missing page, the eight page checks mean nothing and the run must
+          refuse rather than report eight passes."
+    :facts (mutate ":control/expect-status 404\n  :control/expect-title"
+                   ":control/expect-status 200\n  :control/expect-title")
+    :exit 2
+    :expect-in-output ":refused/missing-probe-not-404"}
+
+   {:name "a repeal token left without a control"
+    :why "dropping a control does not fail any citation -- it silently shrinks
+          what the repeal check can see. Only the coverage check notices."
+    :facts (mutate ":host/repeal-tokens [\"Repeal\" \"Expire\" \"LossOfEffectiveness\"]"
+                   ":host/repeal-tokens [\"Repeal\" \"Expire\" \"LossOfEffectiveness\" \"Suspended\"]")
+    :exit 1
+    :expect-in-output ":host/token-uncontrolled"}])
+
+(defn- run-case [i {:keys [name why facts exit expect-in-output]}]
+  (let [path (str "/tmp/break-facts-" i ".edn")]
+    (fs/writeFileSync path facts)
+    (let [r (cp/spawnSync "nbb" (clj->js ["--classpath" "scripts"
+                                          "scripts/verify-facts.cljs" path])
+                          #js {:encoding "utf8" :timeout 600000})
+          out (str (.-stdout r) (.-stderr r))
+          code (.-status r)
+          exit-ok? (= exit code)
+          reason-ok? (str/includes? out expect-in-output)]
+      (fs/unlinkSync path)
+      {:name name :why why
+       :want-exit exit :got-exit code
+       :want-reason expect-in-output
+       :reason-ok? reason-ok?
+       :ok? (and exit-ok? reason-ok?)
+       :tail (->> (str/split-lines out) (remove str/blank?) (take-last 2) (str/join " | "))})))
+
+(defn- main []
+  (println (str "Running " (count cases) " end-to-end cases against the live authorities."))
+  (println "Each is a full run of verify-facts.cljs as a subprocess; this takes a while.")
+  (println)
+  (let [results (doall (map-indexed run-case cases))]
+    (doseq [r results]
+      (println (str (if (:ok? r) "  ok    " "  BAD   ") (:name r)))
+      (println (str "          exit want " (:want-exit r) " got " (:got-exit r)
+                    (when-not (:reason-ok? r)
+                      (str "  |  expected " (:want-reason r) " in output, absent"))))
+      (when-not (:ok? r)
+        (println (str "          " (:tail r)))))
+    (println)
+    (let [bad (remove :ok? results)]
+      (if (seq bad)
+        (do (println (str "BAD -- " (count bad) " of " (count results)
+                          " cases did not behave as documented. verify-facts.cljs is not"
+                          " discriminating the way this repository claims it does, so its"
+                          " green runs do not mean what they say."))
+            (js/process.exit 1))
+        (println (str "OK -- all " (count results) " cases: the unmodified register passes,"
+                      " and each break goes red with its own reason and its own exit code."))))))
+
+(main)
