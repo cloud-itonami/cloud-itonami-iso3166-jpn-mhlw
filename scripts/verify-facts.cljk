@@ -1,6 +1,6 @@
 ;; Re-fetch every entry in facts.edn from the live authority.
 ;;
-;;   nbb --classpath scripts scripts/verify-facts.cljk [facts.edn]
+;;   kbb --backend sci --classpath scripts scripts/verify-facts.cljk [facts.edn]
 ;;
 ;; -- THREE EXIT CODES, ON PURPOSE
 ;;
