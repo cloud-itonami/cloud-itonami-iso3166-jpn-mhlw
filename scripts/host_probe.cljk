@@ -13,7 +13,7 @@
 ;; 4389 the other. Same page, same day, same fetch. The numbers in the
 ;; register were wrong by 23% and nothing in either file could have said so.
 ;;
-;; So there is one de-tag, here, and scripts/measure-host.cljs regenerates
+;; So there is one de-tag, here, and scripts/measure-host.cljk regenerates
 ;; every number the register's header states by calling it. If you change
 ;; de-tag, the header's numbers change with it -- rerun measure-host and
 ;; update them.

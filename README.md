@@ -66,9 +66,9 @@ It is tx-data, so it loads like every other EDN corpus in this workspace:
 Every entry is re-fetched from the live authority by:
 
 ```bash
-nbb --classpath scripts scripts/verify-facts.cljs     # 0 ok / 1 wrong / 2 REFUSED
-nbb --classpath scripts scripts/break-tests.cljs      # does that script actually go red?
-nbb --classpath scripts scripts/measure-host.cljs     # regenerate the header's numbers
+nbb --classpath scripts scripts/verify-facts.cljk     # 0 ok / 1 wrong / 2 REFUSED
+nbb --classpath scripts scripts/break-tests.cljk      # does that script actually go red?
+nbb --classpath scripts scripts/measure-host.cljk     # regenerate the header's numbers
 ```
 
 **Exit 2 is not a pass.** A run that could not answer — an unreadable body, a
