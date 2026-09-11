@@ -1,9 +1,9 @@
 ;; Regenerate every measurement facts.edn's header states.
 ;;
-;;   nbb --classpath scripts scripts/measure-host.cljs
+;;   nbb --classpath scripts scripts/measure-host.cljk
 ;;
 ;; This exists so the header's numbers are reproducible with the SAME de-tag
-;; verify-facts.cljs subtracts needles with -- see scripts/host_probe.cljs for
+;; verify-facts.cljs subtracts needles with -- see scripts/host_probe.cljk for
 ;; why that matters and what it cost the first time it did not.
 ;;
 ;; It measures; it does not judge. Nothing here exits non-zero on a surprise,

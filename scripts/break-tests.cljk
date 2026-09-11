@@ -1,7 +1,7 @@
 ;; Break the register on purpose and check that verify-facts.cljs goes red --
 ;; and red for the RIGHT REASON, and with the right exit code.
 ;;
-;;   nbb --classpath scripts scripts/break-tests.cljs
+;;   nbb --classpath scripts scripts/break-tests.cljk
 ;;
 ;; -- WHAT THIS ADDS OVER THE SELF-TESTS
 ;;
@@ -109,7 +109,7 @@
   (let [path (str "/tmp/break-facts-" i ".edn")]
     (fs/writeFileSync path facts)
     (let [r (cp/spawnSync "nbb" (clj->js ["--classpath" "scripts"
-                                          "scripts/verify-facts.cljs" path])
+                                          "scripts/verify-facts.cljk" path])
                           #js {:encoding "utf8" :timeout 600000})
           out (str (.-stdout r) (.-stderr r))
           code (.-status r)

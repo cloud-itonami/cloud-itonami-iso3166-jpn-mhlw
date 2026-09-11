@@ -1,6 +1,6 @@
 ;; Re-fetch every entry in facts.edn from the live authority.
 ;;
-;;   nbb --classpath scripts scripts/verify-facts.cljs [facts.edn]
+;;   nbb --classpath scripts scripts/verify-facts.cljk [facts.edn]
 ;;
 ;; -- THREE EXIT CODES, ON PURPOSE
 ;;
@@ -587,7 +587,7 @@
 (defn- of-kind [entries k] (filter #(= k (:source/verify %)) entries))
 
 (def ^:private facts-path
-  "facts.edn by default. scripts/break-tests.cljs points this at a doctored
+  "facts.edn by default. scripts/break-tests.cljk points this at a doctored
    copy to check that a broken register actually changes this script's EXIT
    CODE -- the self-tests above exercise the judges, but nothing in them can
    tell you the aggregation and the three exit codes are wired up."
