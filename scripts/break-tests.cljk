@@ -1,7 +1,7 @@
 ;; Break the register on purpose and check that verify-facts.cljs goes red --
 ;; and red for the RIGHT REASON, and with the right exit code.
 ;;
-;;   nbb --classpath scripts scripts/break-tests.cljk
+;;   kbb --backend sci --classpath scripts scripts/break-tests.cljk
 ;;
 ;; -- WHAT THIS ADDS OVER THE SELF-TESTS
 ;;
